@@ -1,0 +1,28 @@
+using UnityEngine;
+using TMPro;
+
+public class CollisionHandler : MonoBehaviour
+{
+    [SerializeField] TMP_Text landingText;
+
+    Rigidbody rb;
+
+    private void Start()
+    {
+        rb = GetComponent<Rigidbody>();
+        landingText.text = "";
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Finish"))
+        {
+            Vector3 pos = transform.position;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.constraints = RigidbodyConstraints.FreezeRotation;
+            landingText.text = $"Landed at: X={pos.x:F2}";
+        }
+    }
+
+}
