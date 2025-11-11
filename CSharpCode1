@@ -1,0 +1,230 @@
+using System.IO;
+using System.Text;
+using TMPro;
+using Unity.Cinemachine;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UI;
+
+
+public class ProjectileLauncher : MonoBehaviour
+{
+    [SerializeField] float angle;
+    [SerializeField] float speed;
+    [SerializeField] float airResistance;
+    [SerializeField] float gravityValue;
+
+    [SerializeField] Slider speedSlider;
+    [SerializeField] GameObject speedSliderObject;
+    [SerializeField] TMP_InputField speedInput;
+
+    [SerializeField] Slider angleSlider;
+    [SerializeField] TMP_InputField angleInput;
+
+    [SerializeField] Slider airResistanceSlider;
+    [SerializeField] TMP_InputField airResistanceInput;
+
+    [SerializeField] Slider gravitySlider;
+    [SerializeField] TMP_InputField gravityInput;
+
+    [SerializeField] Button startButton;
+    [SerializeField] GameObject startButtonObject;
+    [SerializeField] Button resetButton;
+
+    [SerializeField] TMP_Text maxHeightText;
+
+    [SerializeField] CinemachineCamera followCamera;
+
+    StringBuilder csvBuilder;
+
+    Rigidbody rb;
+    Vector3 startPosition;
+    Quaternion startRotation;
+
+    string filePath;
+    float maxHeight;
+    bool launched = false;
+
+    private void Start()
+    {
+        rb = GetComponent<Rigidbody>();
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+
+        Time.timeScale = 0f;
+
+        startPosition = transform.position;
+        startRotation = transform.rotation;
+
+        startButton.onClick.AddListener(OnStartButtonClick);
+        resetButton.onClick.AddListener(OnResetButtonClick);
+
+        filePath = Path.Combine(Application.persistentDataPath, "trajectory_points.csv");
+        Debug.Log(filePath);
+
+        speedSlider.onValueChanged.AddListener(OnSpeedSliderChanged);
+        angleSlider.onValueChanged.AddListener(OnAngleSliderChanged);
+        airResistanceSlider.onValueChanged.AddListener(OnAirResistanceSliderChanged);
+        gravitySlider.onValueChanged.AddListener(OnGravitySliderChanged);
+
+        speedInput.onEndEdit.AddListener(OnSpeedInputChanged);
+        angleInput.onEndEdit.AddListener(OnAngleInputChanged);
+        airResistanceInput.onEndEdit.AddListener(OnAirResistanceInputChanged);
+        gravityInput.onEndEdit.AddListener(OnGravityInputChanged);
+
+        gravityValue = Mathf.Abs(Physics.gravity.y);
+
+        speedSlider.value = speed;
+        angleSlider.value = angle;
+        speedInput.text = speed.ToString("0.00");
+        angleInput.text = angle.ToString("0.00");
+        airResistanceInput.text = airResistance.ToString("0.00");
+        gravityInput.text = gravityValue.ToString("0.00");
+
+        maxHeightText.text = "Max Height: ";
+    }
+
+    private void FixedUpdate()
+    {
+        if (launched && airResistance > 0f)
+        {
+            Vector3 velocity = rb.linearVelocity;
+            float v = velocity.magnitude;
+
+            if (v > 0f) 
+            {
+                Vector3 dragAccel = -airResistance * v * velocity;
+                rb.AddForce(dragAccel, ForceMode.Acceleration);
+            }
+        }
+
+        if (launched)
+        {
+            if (transform.position.y > maxHeight)
+            {
+                maxHeight = transform.position.y;
+                maxHeightText.text = "Max Height: " + maxHeight.ToString("0.00") + " m";
+            }
+
+            if (transform.position.y > 0)
+            {
+                float t = Time.time;
+                Vector3 pos = transform.position;
+                csvBuilder.AppendLine($"{t},{pos.x},{pos.y},{pos.z}");
+            }
+        }
+    }
+
+    void OnSpeedSliderChanged(float value)
+    {
+        speed = value;
+        speedInput.text = value.ToString("0.00");
+    }
+
+    void OnAngleSliderChanged(float value)
+    {
+        angle = value;
+        angleInput.text = value.ToString("0.00");
+    }
+    void OnAirResistanceSliderChanged(float value)
+    {
+        airResistance = value;
+        airResistanceInput.text = value.ToString("0.00");
+    }
+
+    void OnGravitySliderChanged(float value)
+    {
+        gravityValue = value;
+        Physics.gravity = new Vector3(0, -gravityValue, 0);
+        gravityInput.text = gravityValue.ToString("0.00");
+    }
+
+    void OnSpeedInputChanged(string value)
+    {
+        if (float.TryParse(value, out float result))
+        {
+            speed = result;
+            speedSlider.value = result;
+        }
+    }
+
+    void OnAngleInputChanged(string value)
+    {
+        if (float.TryParse(value, out float result))
+        {
+            angle = result;
+            angleSlider.value = result;
+        }
+    }
+    void OnAirResistanceInputChanged(string value)
+    {
+        if (float.TryParse(value, out float result))
+        {
+            airResistance = result;
+            airResistanceSlider.value = result;
+        }
+    }
+
+    void OnGravityInputChanged(string value)
+    {
+        if (float.TryParse(value,out float result))
+        {
+            gravityValue = result;
+            Physics.gravity = new Vector3(0, -gravityValue, 0);
+            gravitySlider.value = result;
+        }
+    }
+
+    void Launch()
+    {
+        speed = speedSlider.value;
+        angle = angleSlider.value;
+        airResistance = airResistanceSlider.value;
+
+        float rad = angle * Mathf.Deg2Rad;
+        Vector3 launchVelocity = new Vector3(speed * Mathf.Cos(rad), speed * Mathf.Sin(rad), 0);
+        rb.linearVelocity = launchVelocity;
+        launched = true;
+    }
+
+    void OnStartButtonClick()
+    {
+        Debug.Log("Start button clicked");
+        Time.timeScale = 1f;
+        startButtonObject.SetActive(false);
+        Launch();
+
+        csvBuilder = new StringBuilder();
+        csvBuilder.AppendLine("Time,X,Y,Z");
+        launched = true;
+    }
+
+    void OnResetButtonClick()
+    {
+        Debug.Log("Reset button clicked");
+
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        rb.constraints = RigidbodyConstraints.None;
+
+        transform.position = startPosition;
+        transform.rotation = startRotation;
+
+        maxHeight = startPosition.y;
+        maxHeightText.text = "Max Height: 0.00 m";
+
+        startButtonObject.SetActive(true);
+
+        followCamera.Follow = transform;
+        followCamera.LookAt = transform;
+
+        Time.timeScale = 0f;
+
+        if (launched)
+        {
+            launched = false;
+            File.WriteAllText(filePath, csvBuilder.ToString());
+            Debug.Log(filePath);
+        }
+    }
+}   
