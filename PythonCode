@@ -1,0 +1,77 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from google.colab import files
+
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+data = pd.read_csv(filename)
+
+t_unity = data['Time'].values
+x_unity = data['X'].values
+y_unity = data['Y'].values
+
+# Match values used in Unity
+g = 9.81                 
+v0 = 50.0              
+theta_deg = 20.0        
+x0, y0 = 0.0, 0.0
+k_drag = 0.2            
+
+theta = np.radians(theta_deg)
+vx0 = v0 * np.cos(theta)
+vy0 = v0 * np.sin(theta)
+
+def simulate_drag_until_impact(k, vx0, vy0, x0, y0, dt=1e-3, t_max=30.0):
+    x, y, vx, vy = x0, y0, vx0, vy0
+    times, xs, ys = [0.0], [x0], [y0]
+    t = 0.0
+    while y >= 0 and t < t_max:
+        v = np.hypot(vx, vy)
+        ax = -k * v * vx
+        ay = -g - k * v * vy
+        vx += ax * dt
+        vy += ay * dt
+        x += vx * dt
+        y += vy * dt
+        t += dt
+        times.append(t)
+        xs.append(x)
+        ys.append(y)
+    return np.array(times), np.array(xs), np.array(ys)
+
+t_drag, x_drag_full, y_drag_full = simulate_drag_until_impact(k_drag, vx0, vy0, x0, y0, dt=0.001, t_max=30.0)
+
+x_drag = np.interp(t_unity, t_drag, x_drag_full)
+y_drag = np.interp(t_unity, t_drag, y_drag_full)
+
+dx = x_unity - x_drag
+dy = y_unity - y_drag
+radial_err = np.hypot(dx, dy)
+
+print("=== Unity vs Quadratic drag (k={:.3f}) ===".format(k_drag))
+print("RMSE:", np.sqrt(np.mean(radial_err**2)))
+print("Max:", np.max(radial_err))
+print("Median:", np.median(radial_err))
+
+# Trajectories Graph
+plt.figure(figsize=(9,6))
+plt.plot(x_unity, y_unity, 'ro', markersize=4, label="Unity")
+plt.plot(x_drag_full, y_drag_full, 'b-', label=f"Quadratic drag model (k={k_drag})")
+plt.xlabel("X (m)")
+plt.ylabel("Y (m)")
+plt.title(f"Unity vs Quadratic drag\nv0={v0} m/s, θ={theta_deg}°")
+plt.legend()
+plt.grid(True)
+plt.show()
+print()
+print()
+# Error vs. Time Graph
+plt.figure(figsize=(9,4))
+plt.plot(t_unity, radial_err, 'g-', label="Unity error vs Quadratic drag")
+plt.xlabel("Time (s)")
+plt.ylabel("Radial error (m)")
+plt.title("Unity deviation from quadratic drag model")
+plt.legend()
+plt.grid(True)
+plt.show()
